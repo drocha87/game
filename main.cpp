@@ -163,6 +163,7 @@ void render_fps(GameContext *ctx)
 
 void render_tile(GameContext *ctx, Tile tile, int x, int y)
 {
+    // @todo: add more context to tiles
     static char buffer[128] = {0};
     Text output = {0};
 
