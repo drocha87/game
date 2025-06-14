@@ -1,0 +1,59 @@
+# Visual Studio related files
+.vs/
+*.VC.db
+*.sdf
+*.suo
+*.user
+*.opendb
+*.vcxproj.filters
+*.vcxproj.user
+*.sln.docstates
+
+# Build artifacts
+# For your 'x64' and 'Game/x64' directories
+x64/
+Game/x64/
+
+# Common object/library files
+*.obj
+*.lib
+*.exp
+*.ilk
+*.pch
+*.pdb  # Program Debug Database (can be large and rebuilt)
+*.ipch # Precompiled header caches
+
+# Executables and DLLs
+*.exe
+*.dll
+
+# Logs and temporary files
+*.log
+*.tlog # Specific to MSBuild's incremental build tracking (e.g., Game.tlog)
+*.tmp
+
+# Visual Studio Code specific (user preferences, not project essential)
+# .vscode/
+
+# Vendor directory (IMPORTANT: Read explanation below)
+# Generally, you DO NOT want to gitignore the 'vendor' directory itself.
+# Instead, you want to ignore build artifacts *within* the vendor directory
+# if you were building the vendor libraries from source within your project,
+# but it seems you're including pre-built libraries.
+# If you are committing the pre-built binaries (which is common for
+# small projects or if you don't want to rely on build scripts for dependencies),
+# then you would *not* ignore the vendor directory.
+# If you are building these libraries from source *within your project's build process*
+# and don't want to commit their build outputs, you would add more specific ignores here.
+# For your current structure, where they appear to be pre-built distributions,
+# you likely want to *include* the vendor directory in your repository.
+# If you did build them, you might consider:
+# vendor/**/build/
+# vendor/**/lib/*.obj
+# vendor/**/lib/*.lib
+# vendor/**/lib/*.exp
+# vendor/**/lib/*.pdb
+
+# This line ensures that even if a directory is ignored, .gitkeep files (or similar)
+# can still be committed to preserve the directory structure if it's empty.
+# !.gitkeep

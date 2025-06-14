@@ -1,0 +1,19 @@
+{
+  "C_Cpp.default.cppStandard": "c++20",
+  "C_Cpp.default.cStandard": "c11",
+  "C_Cpp.default.includePath": [
+    "vendor\\SDL3_ttf-3.1.0\\include",
+    "vendor\\SDL3-3.2.16\\include",
+    "vendor\\SDL3_image-3.2.4\\include"
+  ],
+  "files.associations": {
+    "*.json.liquid": "json",
+    "*.yaml.liquid": "yaml",
+    "*.md.liquid": "markdown",
+    "*.js.liquid": "liquid-javascript",
+    "*.css.liquid": "liquid-css",
+    "*.scss.liquid": "liquid-scss",
+    "xstring": "cpp"
+  },
+  "cSpell.words": ["MOUSEWHEEL"]
+}
