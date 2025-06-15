@@ -14,11 +14,14 @@
 #include <backends/imgui_impl_sdl3.h>
 #include <backends/imgui_impl_sdlrenderer3.h>
 
-const int TILE_SIZE = 48;
-const int GRID_WIDTH = 10;
-const int GRID_HEIGHT = 10;
+#define STB_PERLIN_IMPLEMENTATION
+#include "stb_perlin.h"
+
+#include "game.h"
+#include "events.h"
 
 static SDL_Color WHITE = {255, 255, 255, SDL_ALPHA_OPAQUE};
+static SDL_Color DEFAULT_BACKGROUND_COLOR = {0x18, 0x18, 0x18, SDL_ALPHA_OPAQUE};
 
 enum TileType : uint8_t
 {
@@ -32,48 +35,67 @@ struct Tile
 {
     TileType type;
     size_t index;
+    SDL_FRect rect;
 };
 
-static const Tile UnknownTile = {.type = TileType::Unknown};
-static const size_t MAP_SIZE = 128;
-static std::array<Tile, MAP_SIZE * MAP_SIZE> tiles;
+constexpr int TILE_SIZE = 32;
+constexpr int MAP_SIZE = 100;
+constexpr int WORLD_WIDTH = MAP_SIZE * TILE_SIZE;
+constexpr int WORLD_HEIGHT = MAP_SIZE * TILE_SIZE;
+constexpr int TILES_FLAT_SIZE = MAP_SIZE * MAP_SIZE;
 
-void initialize_map()
+constexpr Tile UnknownTile = {.type = TileType::Unknown};
+static std::array<Tile, TILES_FLAT_SIZE> tiles_data;
+
+void initialize_map(int noise_seed = 1242)
 {
-    size_t index = 0;
-    for (auto &tile : tiles)
+    constexpr float NOISE_SCALE = 0.15f;
+
+    for (size_t index = 0; index < tiles_data.size(); ++index)
     {
-        tile.type = TileType::Water;
+        auto &tile = tiles_data[index];
+
+        float fx = index % MAP_SIZE;
+        float fy = index / MAP_SIZE;
+
+        float noise = stb_perlin_noise3_seed(fx * NOISE_SCALE, fy * NOISE_SCALE, 0.0f, 0, 0, 0, noise_seed);
+        noise = (noise + 1.0f) * 0.5f;
+
+        if (noise < 0.3f)
+        {
+            tile.type = TileType::Water;
+        }
+        else if (noise < 0.6f)
+        {
+            tile.type = TileType::Sand;
+        }
+        else
+        {
+            tile.type = TileType::Grass;
+        }
+
         tile.index = index;
-        index++;
+
+        int x = fx;
+        int y = fy;
+
+        tile.rect = {
+            static_cast<float>(x) * TILE_SIZE,
+            static_cast<float>(y) * TILE_SIZE,
+            static_cast<float>(TILE_SIZE),
+            static_cast<float>(TILE_SIZE)};
     }
 }
 
 Tile get_tile_from_coord(int x, int y)
 {
     size_t index = y * MAP_SIZE + x;
-    if (tiles.size() > index)
+    if (tiles_data.size() > index)
     {
-        return tiles.at(index);
+        return tiles_data.at(index);
     }
     return UnknownTile;
 }
-
-struct GameContext
-{
-    SDL_Window *window;
-    SDL_Renderer *renderer;
-    // SDL_Texture *texture;
-    TTF_Font *font;
-    SDL_FPoint mouse_point;
-    SDL_MouseButtonFlags mouse_flags;
-
-    float zoom_scale;
-    bool should_scale;
-
-    // timer related variables
-    Uint32 last_time;
-};
 
 void update_mouse(GameContext *ctx)
 {
@@ -90,15 +112,15 @@ struct Text
     SDL_Surface *surface;
 };
 
-bool prepare_text(GameContext *ctx, const char *text, size_t size, SDL_Color color, Text *output)
+bool prepare_text(GameContext &ctx, const char *text, size_t size, SDL_Color color, Text *output)
 {
-    TTF_SetFontSize(ctx->font, size);
+    TTF_SetFontSize(ctx.font, size);
 
     int w, h;
-    if (TTF_GetStringSize(ctx->font, text, 0, &w, &h))
+    if (TTF_GetStringSize(ctx.font, text, 0, &w, &h))
     {
         output->rect = SDL_FRect{.w = (float)w, .h = (float)h};
-        output->surface = TTF_RenderText_Blended(ctx->font, text, 0, color);
+        output->surface = TTF_RenderText_Blended(ctx.font, text, 0, color);
         return true;
     }
 
@@ -111,11 +133,11 @@ void destroy_text(Text *text)
     SDL_DestroySurface(text->surface);
 }
 
-void render_text(GameContext *ctx, Text *text)
+void render_text(GameContext &ctx, Text *text)
 {
     if (text->surface)
     {
-        auto texture = SDL_CreateTextureFromSurface(ctx->renderer, text->surface);
+        auto texture = SDL_CreateTextureFromSurface(ctx.renderer, text->surface);
         if (!texture)
         {
             SDL_Log("Couldn't create text: %s\n", SDL_GetError());
@@ -126,13 +148,13 @@ void render_text(GameContext *ctx, Text *text)
             SDL_GetTextureSize(texture, &dst.w, &dst.h);
             dst.x = text->rect.x;
             dst.y = text->rect.y;
-            SDL_RenderTexture(ctx->renderer, texture, NULL, &dst);
+            SDL_RenderTexture(ctx.renderer, texture, NULL, &dst);
             SDL_DestroyTexture(texture);
         }
     }
 }
 
-void render_fps(GameContext *ctx)
+void render_fps(GameContext &ctx)
 {
     static Uint32 fps = 0, elapsed = 0;
     static char buffer[128] = {0};
@@ -140,8 +162,8 @@ void render_fps(GameContext *ctx)
     Uint32 current_time, frame_time;
 
     current_time = SDL_GetTicks();
-    frame_time = current_time - ctx->last_time;
-    ctx->last_time = current_time;
+    frame_time = current_time - ctx.last_time;
+    ctx.last_time = current_time;
 
     elapsed += frame_time;
 
@@ -152,7 +174,7 @@ void render_fps(GameContext *ctx)
     }
 
     int rw, rh;
-    SDL_GetCurrentRenderOutputSize(ctx->renderer, &rw, &rh);
+    SDL_GetCurrentRenderOutputSize(ctx.renderer, &rw, &rh);
 
     snprintf(buffer, sizeof buffer, "FPS: %f", fps);
     Text t = {0};
@@ -165,43 +187,99 @@ void render_fps(GameContext *ctx)
     }
 }
 
-void render_tile(GameContext *ctx, Tile tile, int x, int y)
+void render_tile(GameContext &ctx, const Tile &tile)
 {
     // @todo: add more context to tiles
-    static char buffer[128] = {0};
-    Text output = {0};
+    // static char buffer[128] = {0};
+    // Text output = {0};
 
-    SDL_FRect cell = {x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE};
+    // SDL_FRect cell = {x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE};
 
-    snprintf(buffer, sizeof buffer, "%zu", tile.index);
-    if (prepare_text(ctx, buffer, 12, WHITE, &output))
-    {
-        output.rect.x = cell.x;
-        output.rect.y = cell.y;
-        render_text(ctx, &output);
-        destroy_text(&output);
-    }
+    // snprintf(buffer, sizeof buffer, "%zu", tile.index);
+    // if (prepare_text(ctx, buffer, 12, WHITE, &output))
+    // {
+    //     output.rect.x = tile.rect.x;
+    //     output.rect.y = tile.rect.y;
+    //     render_text(ctx, &output);
+    //     destroy_text(&output);
+    // }
 
     switch (tile.type)
     {
     case TileType::Grass:
     {
-        SDL_SetRenderDrawColor(ctx->renderer, 0, 100, 0, 255);
+        SDL_SetRenderDrawColor(ctx.renderer, 0, 100, 0, 255);
         break;
     }
     case TileType::Water:
     {
-        SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 100, 255);
+        SDL_SetRenderDrawColor(ctx.renderer, 0, 0, 100, 255);
         break;
     }
     default:
     {
-        SDL_SetRenderDrawColor(ctx->renderer, 100, 0, 0, 255);
+        SDL_SetRenderDrawColor(ctx.renderer, 100, 0, 0, 255);
         break;
     }
     }
 
-    SDL_RenderRect(ctx->renderer, &cell);
+    SDL_RenderFillRect(ctx.renderer, &tile.rect);
+}
+
+void render_world(GameContext &ctx)
+{
+    SDL_SetRenderTarget(ctx.renderer, ctx.world_layer_texture);
+    SDL_SetRenderDrawColor(
+        ctx.renderer,
+        DEFAULT_BACKGROUND_COLOR.r,
+        DEFAULT_BACKGROUND_COLOR.g,
+        DEFAULT_BACKGROUND_COLOR.b,
+        DEFAULT_BACKGROUND_COLOR.a);
+
+    SDL_RenderClear(ctx.renderer);
+
+    // Apply world camera transformations to the renderer
+    SDL_SetRenderScale(ctx.renderer, ctx.zoom_scale, ctx.zoom_scale);
+
+    // Remember that SDL_RenderCopyEx takes source/destination rectangles.
+    // You'll need to calculate these based on your worldCameraX/Y and worldCameraZoom.
+    // For drawing individual world elements, you'd translate their coordinates:
+    // SDL_FRect worldDestRect = { spriteX - worldCameraX, spriteY - worldCameraY, spriteWidth, spriteHeight };
+    // SDL_RenderTexture(ctx.renderer, spriteTexture, NULL, &worldDestRect);
+    // Or you can use SDL_SetRenderLogicalPresentation(ctx.renderer, width, height, SDL_RendererLogicalPresentationMode::SDL_LOGICAL_PRESENTATION_LINEAR);
+    // and then just move the world's origin.
+
+    for (auto &tile : tiles_data)
+    {
+        render_tile(ctx, tile);
+    }
+
+    // Reset scale if you only want it for the world texture.
+    // SDL_SetRenderScale(ctx.renderer, 1.0f, 1.0f);
+
+    // 2. Reset Render Target to Window
+    SDL_SetRenderTarget(ctx.renderer, NULL);
+
+    // 3. Compose everything on the main renderer
+    SDL_SetRenderDrawColor(
+        ctx.renderer,
+        DEFAULT_BACKGROUND_COLOR.r,
+        DEFAULT_BACKGROUND_COLOR.g,
+        DEFAULT_BACKGROUND_COLOR.b,
+        DEFAULT_BACKGROUND_COLOR.a);
+
+    SDL_RenderClear(ctx.renderer);
+
+    int rw, rh;
+    SDL_GetRenderOutputSize(ctx.renderer, &rw, &rh);
+
+    // Draw the world layer (potentially with its own final scaling/positioning on the screen)
+    // @fixme: do not render the entire world if it is out of the screen
+    SDL_FRect world_display_rect = {ctx.camera_x, ctx.camera_y, (float)WORLD_WIDTH, (float)WORLD_HEIGHT};
+    SDL_RenderTexture(ctx.renderer, ctx.world_layer_texture, NULL, &world_display_rect); // Blit the entire world texture to the screen
+
+    // Present the final rendered frame
+    // SDL_RenderPresent(ctx.renderer);
 }
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
@@ -251,6 +329,19 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
+    ctx->world_layer_texture = SDL_CreateTexture(ctx->renderer,
+                                                 SDL_PIXELFORMAT_RGBA8888,
+                                                 SDL_TEXTUREACCESS_TARGET,
+                                                 WORLD_WIDTH,
+                                                 WORLD_HEIGHT);
+    if (!ctx->world_layer_texture)
+    {
+        SDL_Log("Could not create world layer: %s\n", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+    // @note: set it for transparency
+    // SDL_SetTextureBlendMode(ctx->world_layer_texture, SDL_BLENDMODE_BLEND);
+
     if (!SDL_CaptureMouse(true))
     {
         SDL_Log("Could not capture mouse: %s\n", SDL_GetError());
@@ -280,28 +371,14 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
-    ImGui_ImplSDL3_ProcessEvent(event);
-    if (event->type == SDL_EVENT_QUIT)
+    GameContext *ctx = static_cast<GameContext *>(appstate);
+    if (ctx)
     {
-        return SDL_APP_SUCCESS; // Terminate app gracefully
+        return handle_events(*ctx, event);
     }
-    else if (event->type == SDL_EVENT_WINDOW_RESIZED)
-    {
-        // Handle resize here
-        // handleWindowResize(event->window.windowID, event->window.data1, event->window.data2);
-    }
-    else if (event->type == SDL_EVENT_MOUSE_WHEEL)
-    {
-        SDL_MouseWheelEvent wheel = event->wheel;
-        // @todo: handle flipped SDL_MOUSEWHEEL_FLIPPED
-        if (wheel.direction == SDL_MOUSEWHEEL_NORMAL && wheel.y != 0)
-        {
-            GameContext *ctx = static_cast<GameContext *>(appstate);
-            ctx->zoom_scale *= wheel.y < 0 ? 0.9f : 1.1f;
-            ctx->should_scale = true;
-        }
-    }
-    return SDL_APP_CONTINUE;
+
+    // if the GameContext is not valid there's no reason to keep going
+    return SDL_APP_FAILURE;
 }
 
 bool show_demo_window = true;
@@ -312,57 +389,54 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 {
     GameContext *ctx = static_cast<GameContext *>(appstate);
 
-    SDL_SetRenderDrawColor(ctx->renderer, 0x18, 0x18, 0x18, 255);
+    SDL_SetRenderDrawColor(
+        ctx->renderer,
+        DEFAULT_BACKGROUND_COLOR.r,
+        DEFAULT_BACKGROUND_COLOR.g,
+        DEFAULT_BACKGROUND_COLOR.b,
+        DEFAULT_BACKGROUND_COLOR.a);
+
     SDL_RenderClear(ctx->renderer);
 
-    if (ctx->should_scale)
-    {
-        ctx->zoom_scale = std::clamp(ctx->zoom_scale, 1.0f, 5.0f);
-        SDL_SetRenderScale(ctx->renderer, ctx->zoom_scale, ctx->zoom_scale);
-        ctx->should_scale = false;
-    }
+    // if (ctx->should_scale)
+    // {
+    //     ctx->zoom_scale = std::clamp(ctx->zoom_scale, 1.0f, 5.0f);
+    //     SDL_SetRenderScale(ctx->renderer, ctx->zoom_scale, ctx->zoom_scale);
+    //     ctx->should_scale = false;
+    // }
 
     update_mouse(ctx);
 
-    for (int y = 0; y < GRID_HEIGHT; y++)
-    {
-        for (int x = 0; x < GRID_WIDTH; x++)
-        {
-            Tile tile = get_tile_from_coord(x, y);
-            render_tile(ctx, tile, x, y);
-        }
-    }
+    // if (0)
+    // {
+    //     SDL_SetRenderDrawColor(ctx->renderer, 100, 100, 100, 255); // Grid color
 
-    if (0)
-    {
-        SDL_SetRenderDrawColor(ctx->renderer, 100, 100, 100, 255); // Grid color
-
-        for (int y = 0; y < GRID_HEIGHT; y++)
-        {
-            for (int x = 0; x < GRID_WIDTH; x++)
-            {
-                SDL_FRect cell = {x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE};
-                bool mouse_in_cell = SDL_PointInRectFloat(&ctx->mouse_point, &cell);
-                if (mouse_in_cell)
-                {
-                    if (ctx->mouse_flags & SDL_BUTTON_LMASK)
-                    {
-                        SDL_SetRenderDrawColor(ctx->renderer, 100, 0, 100, 255);
-                        SDL_RenderFillRect(ctx->renderer, &cell);
-                        SDL_SetRenderDrawColor(ctx->renderer, 100, 100, 100, 255); // Grid color
-                    }
-                    else
-                    {
-                        SDL_RenderFillRect(ctx->renderer, &cell);
-                    }
-                }
-                else
-                {
-                    SDL_RenderRect(ctx->renderer, &cell);
-                }
-            }
-        }
-    }
+    //     for (int y = 0; y < GRID_HEIGHT; y++)
+    //     {
+    //         for (int x = 0; x < GRID_WIDTH; x++)
+    //         {
+    //             SDL_FRect cell = {x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE};
+    //             bool mouse_in_cell = SDL_PointInRectFloat(&ctx->mouse_point, &cell);
+    //             if (mouse_in_cell)
+    //             {
+    //                 if (ctx->mouse_flags & SDL_BUTTON_LMASK)
+    //                 {
+    //                     SDL_SetRenderDrawColor(ctx->renderer, 100, 0, 100, 255);
+    //                     SDL_RenderFillRect(ctx->renderer, &cell);
+    //                     SDL_SetRenderDrawColor(ctx->renderer, 100, 100, 100, 255); // Grid color
+    //                 }
+    //                 else
+    //                 {
+    //                     SDL_RenderFillRect(ctx->renderer, &cell);
+    //                 }
+    //             }
+    //             else
+    //             {
+    //                 SDL_RenderRect(ctx->renderer, &cell);
+    //             }
+    //         }
+    //     }
+    // }
 
     if (0)
     {
@@ -386,14 +460,16 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
     // render_fps(ctx);
 
-    // Start the Dear ImGui frame
-    ImGui_ImplSDLRenderer3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
-    ImGui::ShowDemoWindow(&show_demo_window);
-    ImGui::Render();
+    render_world(*ctx);
 
-    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), ctx->renderer);
+    // Start the Dear ImGui frame
+    // ImGui_ImplSDLRenderer3_NewFrame();
+    // ImGui_ImplSDL3_NewFrame();
+    // ImGui::NewFrame();
+    // ImGui::ShowDemoWindow(&show_demo_window);
+    // ImGui::Render();
+
+    // ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), ctx->renderer);
 
     SDL_RenderPresent(ctx->renderer);
 
@@ -405,8 +481,6 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
     GameContext *ctx = static_cast<GameContext *>(appstate);
     TTF_CloseFont(ctx->font);
 
-    // Cleanup
-    // [If using SDL_MAIN_USE_CALLBACKS: all code below would likely be your SDL_AppQuit() function]
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
