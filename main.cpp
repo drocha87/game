@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <format>
 #include <array>
+#include <vector>
 
 #define SDL_MAIN_USE_CALLBACKS 1
 
@@ -46,6 +47,10 @@ constexpr int TILES_FLAT_SIZE = MAP_SIZE * MAP_SIZE;
 
 constexpr Tile UnknownTile = {.type = TileType::Unknown};
 static std::array<Tile, TILES_FLAT_SIZE> tiles_data;
+
+SDL_Texture *grass;
+SDL_Texture *water;
+SDL_Texture *sand;
 
 void initialize_map(int noise_seed = 1242)
 {
@@ -208,22 +213,64 @@ void render_tile(GameContext &ctx, const Tile &tile)
     {
     case TileType::Grass:
     {
-        SDL_SetRenderDrawColor(ctx.renderer, 0, 100, 0, 255);
+        SDL_RenderTexture(ctx.renderer, grass, NULL, &tile.rect);
+        // SDL_SetRenderDrawColor(ctx.renderer, 0, 100, 0, 255);
+        // SDL_RenderFillRect(ctx.renderer, &tile.rect);
         break;
     }
     case TileType::Water:
     {
-        SDL_SetRenderDrawColor(ctx.renderer, 0, 0, 100, 255);
+        SDL_RenderTexture(ctx.renderer, water, NULL, &tile.rect);
+        // SDL_SetRenderDrawColor(ctx.renderer, 0, 0, 100, 255);
+        // SDL_RenderFillRect(ctx.renderer, &tile.rect);
+        break;
+    }
+    case TileType::Sand:
+    {
+        SDL_RenderTexture(ctx.renderer, sand, NULL, &tile.rect);
+        // SDL_SetRenderDrawColor(ctx.renderer, 0, 0, 100, 255);
+        // SDL_RenderFillRect(ctx.renderer, &tile.rect);
         break;
     }
     default:
     {
         SDL_SetRenderDrawColor(ctx.renderer, 100, 0, 0, 255);
+        SDL_RenderFillRect(ctx.renderer, &tile.rect);
         break;
     }
     }
+}
 
-    SDL_RenderFillRect(ctx.renderer, &tile.rect);
+std::vector<size_t> get_neighbors(size_t index)
+{
+    // Pre-allocate space for up to 8 neighbors to avoid reallocations.
+    // A tile can have a maximum of 8 neighbors (a 3x3 square excluding itself).
+    std::vector<size_t> neighbors;
+    neighbors.reserve(8);
+
+    const int x = static_cast<int>(index % MAP_SIZE);
+    const int y = static_cast<int>(index / MAP_SIZE);
+
+    // Using an array of offsets can sometimes be more readable and slightly faster
+    // than nested loops if the compiler can optimize array access better.
+    // This also removes the 'skip self' check.
+    const std::array<int, 8> dx_offsets = {-1, 0, 1, -1, 1, -1, 0, 1};
+    const std::array<int, 8> dy_offsets = {-1, -1, -1, 0, 0, 1, 1, 1};
+
+    for (size_t i = 0; i < 8; ++i)
+    {
+        const int nx = x + dx_offsets[i];
+        const int ny = y + dy_offsets[i];
+
+        // Check bounds
+        if (nx >= 0 && ny >= 0 && nx < MAP_SIZE && ny < MAP_SIZE)
+        {
+            // Calculate 1D index directly
+            neighbors.push_back(static_cast<size_t>(ny * MAP_SIZE + nx));
+        }
+    }
+
+    return neighbors;
 }
 
 void render_world(GameContext &ctx)
@@ -363,6 +410,27 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     ImGui_ImplSDL3_InitForSDLRenderer(ctx->window, ctx->renderer);
     ImGui_ImplSDLRenderer3_Init(ctx->renderer);
     io.Fonts->AddFontDefault();
+
+    grass = IMG_LoadTexture(ctx->renderer, "assets/grass.png");
+    if (!grass)
+    {
+        SDL_Log("Couldn't load grass asset: %s\n", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+
+    water = IMG_LoadTexture(ctx->renderer, "assets/water.png");
+    if (!water)
+    {
+        SDL_Log("Couldn't load water asset: %s\n", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+
+    sand = IMG_LoadTexture(ctx->renderer, "assets/sand.png");
+    if (!sand)
+    {
+        SDL_Log("Couldn't load water asset: %s\n", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
 
     // Initialize SDL, create window/renderer, load assets
     // Set up *appstate if you want to avoid global variables
