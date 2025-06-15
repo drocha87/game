@@ -10,6 +10,10 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 
+#include <imgui.h>
+#include <backends/imgui_impl_sdl3.h>
+#include <backends/imgui_impl_sdlrenderer3.h>
+
 const int TILE_SIZE = 48;
 const int GRID_WIDTH = 10;
 const int GRID_HEIGHT = 10;
@@ -202,10 +206,10 @@ void render_tile(GameContext *ctx, Tile tile, int x, int y)
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
-    initialize_map();
-
     GameContext *ctx = new GameContext();
     *appstate = ctx;
+
+    initialize_map();
 
     // @note: ensure that the game starts with the zoom scaled to 1
     ctx->zoom_scale = 1;
@@ -237,7 +241,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
-    SDL_SetWindowResizable(ctx->window, true);
+    SDL_SetWindowResizable(ctx->window, false);
+    SDL_SetWindowPosition(ctx->window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
     // @todo: put it in a configuration
     if (SDL_SetRenderVSync(ctx->renderer, 1) == false)
@@ -251,6 +256,23 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         SDL_Log("Could not capture mouse: %s\n", SDL_GetError());
         return SDL_APP_FAILURE;
     }
+
+    // setup ImGUI
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplSDL3_InitForSDLRenderer(ctx->window, ctx->renderer);
+    ImGui_ImplSDLRenderer3_Init(ctx->renderer);
+    io.Fonts->AddFontDefault();
+
     // Initialize SDL, create window/renderer, load assets
     // Set up *appstate if you want to avoid global variables
     return SDL_APP_CONTINUE; // Or SDL_APP_FAILURE on error
@@ -258,6 +280,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
+    ImGui_ImplSDL3_ProcessEvent(event);
     if (event->type == SDL_EVENT_QUIT)
     {
         return SDL_APP_SUCCESS; // Terminate app gracefully
@@ -280,6 +303,10 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     }
     return SDL_APP_CONTINUE;
 }
+
+bool show_demo_window = true;
+bool show_another_window = false;
+ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
@@ -359,6 +386,15 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
     // render_fps(ctx);
 
+    // Start the Dear ImGui frame
+    ImGui_ImplSDLRenderer3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+    ImGui::ShowDemoWindow(&show_demo_window);
+    ImGui::Render();
+
+    ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), ctx->renderer);
+
     SDL_RenderPresent(ctx->renderer);
 
     return SDL_APP_CONTINUE; // Or SDL_APP_FAILURE
@@ -368,6 +404,12 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
     GameContext *ctx = static_cast<GameContext *>(appstate);
     TTF_CloseFont(ctx->font);
+
+    // Cleanup
+    // [If using SDL_MAIN_USE_CALLBACKS: all code below would likely be your SDL_AppQuit() function]
+    ImGui_ImplSDLRenderer3_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
 
     SDL_DestroyRenderer(ctx->renderer);
     SDL_DestroyWindow(ctx->window);

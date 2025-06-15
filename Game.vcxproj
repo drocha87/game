@@ -107,7 +107,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>C:\Users\dlmro\source\repos\Game\vendor\SDL3_image-3.2.4\include;C:\Users\dlmro\source\repos\Game\vendor\SDL3_ttf-3.1.0\include;C:\Users\dlmro\source\repos\Game\vendor\SDL3-3.2.16\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\dlmro\source\repos\Game\vendor\imgui-1.91.9b;C:\Users\dlmro\source\repos\Game\vendor\SDL3_image-3.2.4\include;C:\Users\dlmro\source\repos\Game\vendor\SDL3_ttf-3.1.0\include;C:\Users\dlmro\source\repos\Game\vendor\SDL3-3.2.16\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -132,6 +132,23 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="vendor\imgui-1.91.9b\backends\imgui_impl_sdl3.cpp" />
+    <ClCompile Include="vendor\imgui-1.91.9b\backends\imgui_impl_sdlrenderer3.cpp" />
+    <ClCompile Include="vendor\imgui-1.91.9b\imgui.cpp" />
+    <ClCompile Include="vendor\imgui-1.91.9b\imgui_demo.cpp" />
+    <ClCompile Include="vendor\imgui-1.91.9b\imgui_draw.cpp" />
+    <ClCompile Include="vendor\imgui-1.91.9b\imgui_tables.cpp" />
+    <ClCompile Include="vendor\imgui-1.91.9b\imgui_widgets.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="vendor\imgui-1.91.9b\backends\imgui_impl_sdl3.h" />
+    <ClInclude Include="vendor\imgui-1.91.9b\backends\imgui_impl_sdlrenderer3.h" />
+    <ClInclude Include="vendor\imgui-1.91.9b\imconfig.h" />
+    <ClInclude Include="vendor\imgui-1.91.9b\imgui.h" />
+    <ClInclude Include="vendor\imgui-1.91.9b\imgui_internal.h" />
+    <ClInclude Include="vendor\imgui-1.91.9b\imstb_rectpack.h" />
+    <ClInclude Include="vendor\imgui-1.91.9b\imstb_textedit.h" />
+    <ClInclude Include="vendor\imgui-1.91.9b\imstb_truetype.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

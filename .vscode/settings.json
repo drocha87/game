@@ -4,7 +4,8 @@
   "C_Cpp.default.includePath": [
     "vendor\\SDL3_ttf-3.1.0\\include",
     "vendor\\SDL3-3.2.16\\include",
-    "vendor\\SDL3_image-3.2.4\\include"
+    "vendor\\SDL3_image-3.2.4\\include",
+    "vendor\\imgui-1.91.9b"
   ],
   "files.associations": {
     "*.json.liquid": "json",

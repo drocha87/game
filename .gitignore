@@ -22,6 +22,7 @@ Game/x64/
 *.pch
 *.pdb  # Program Debug Database (can be large and rebuilt)
 *.ipch # Precompiled header caches
+*.o
 
 # Executables and DLLs
 *.exe
@@ -57,3 +58,19 @@ Game/x64/
 # This line ensures that even if a directory is ignored, .gitkeep files (or similar)
 # can still be committed to preserve the directory structure if it's empty.
 # !.gitkeep
+
+## Dear ImGui artifacts
+imgui.ini
+imgui*.ini
+
+## Getting files created in JSON/Schemas/Catalog/ from a VS2022 update
+JSON/
+
+## Commonly used CMake directories
+build*/
+
+## JetBrains IDE artifacts
+cmake-build-*
+
+
+
