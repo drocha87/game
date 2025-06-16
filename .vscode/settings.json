@@ -14,7 +14,8 @@
     "*.js.liquid": "liquid-javascript",
     "*.css.liquid": "liquid-css",
     "*.scss.liquid": "liquid-scss",
-    "xstring": "cpp"
+    "xstring": "cpp",
+    "algorithm": "cpp"
   },
   "cSpell.words": ["MOUSEWHEEL"]
 }
