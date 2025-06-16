@@ -32,26 +32,18 @@ enum TileType : uint8_t
     Unknown,
 };
 
-constexpr std::array<SDL_FRect, static_cast<size_t>(TileType::Unknown)> tileset_map = {{
-    {32.0, 64.0, 32.0, 32.0},   // TileType::Grass
-    {32.0, 160.0, 32.0, 32.0},  // TileType::Sand
-    {288.0, 64.0, 32.0, 32.0},  // TileType::Water
-    {480.0, 320.0, 32.0, 32.0}, // TileType::DeepWater
-}};
-
-SDL_Texture *tileset;
-
 struct Tile
 {
     TileType type;
     size_t index;
     SDL_FRect rect;
+    SDL_FRect sprite;
     SDL_Point coord;
     std::array<int, 8> neighbors;
 };
 
 constexpr int TILE_SIZE = 32;
-constexpr int MAP_SIZE = 100;
+constexpr int MAP_SIZE = 50;
 constexpr int WORLD_WIDTH = MAP_SIZE * TILE_SIZE;
 constexpr int WORLD_HEIGHT = MAP_SIZE * TILE_SIZE;
 constexpr int TILES_FLAT_SIZE = MAP_SIZE * MAP_SIZE;
@@ -59,30 +51,142 @@ constexpr int TILES_FLAT_SIZE = MAP_SIZE * MAP_SIZE;
 constexpr Tile UnknownTile = {.type = TileType::Unknown};
 static std::array<Tile, TILES_FLAT_SIZE> tiles_data;
 
+SDL_Texture *tileset_grass;
+static std::array<SDL_Point, 256> terrain_mask4_uv;
+
 void set_neighbors(Tile &tile)
 {
-    // Pre-allocate space for up to 8 neighbors to avoid reallocations.
-    // A tile can have a maximum of 8 neighbors (a 3x3 square excluding itself).
-    // std::vector<size_t> neighbors;
-    // neighbors.reserve(8);
-
-    // Using an array of offsets can sometimes be more readable and slightly faster
-    // than nested loops if the compiler can optimize array access better.
-    // This also removes the 'skip self' check.
-    const std::array<int, 8> dx_offsets = {-1, 0, 1, -1, 1, -1, 0, 1};
-    const std::array<int, 8> dy_offsets = {-1, -1, -1, 0, 0, 1, 1, 1};
+    tile.neighbors.fill(-1);
+    const std::array<SDL_Point, 8> offset = {{
+        {0, -1},  // top
+        {1, -1},  // top-right
+        {1, 0},   // right
+        {1, 1},   // bottom-right
+        {0, 1},   // bottom
+        {-1, 1},  // bottom-left
+        {-1, 0},  // left
+        {-1, -1}, // top-left
+    }};
 
     for (size_t i = 0; i < 8; ++i)
     {
-        const int nx = tile.coord.x + dx_offsets[i];
-        const int ny = tile.coord.y + dy_offsets[i];
+        const int nx = tile.coord.x + offset[i].x;
+        const int ny = tile.coord.y + offset[i].y;
 
-        // Check bounds
         if (nx >= 0 && ny >= 0 && nx < MAP_SIZE && ny < MAP_SIZE)
         {
             tile.neighbors[i] = ny * MAP_SIZE + nx;
         }
     }
+}
+
+void initialize_terrain_mask()
+{
+    terrain_mask4_uv.fill({0, 0});
+
+    terrain_mask4_uv[0] = {0, 0};
+    terrain_mask4_uv[4] = {1, 0};
+    terrain_mask4_uv[84] = {2, 0};
+    terrain_mask4_uv[92] = {3, 0};
+    terrain_mask4_uv[124] = {4, 0};
+    terrain_mask4_uv[116] = {5, 0};
+    terrain_mask4_uv[80] = {6, 0};
+    terrain_mask4_uv[16] = {0, 1};
+    terrain_mask4_uv[28] = {1, 1};
+    terrain_mask4_uv[117] = {2, 1};
+    terrain_mask4_uv[95] = {3, 1};
+    terrain_mask4_uv[255] = {4, 1};
+    terrain_mask4_uv[253] = {5, 1};
+    terrain_mask4_uv[113] = {6, 1};
+    terrain_mask4_uv[21] = {0, 2};
+    terrain_mask4_uv[87] = {1, 2};
+    terrain_mask4_uv[221] = {2, 2};
+    terrain_mask4_uv[127] = {3, 2};
+    // terrain_mask4_uv[255] = {4, 2};
+    terrain_mask4_uv[247] = {5, 2};
+    terrain_mask4_uv[209] = {6, 2};
+    terrain_mask4_uv[29] = {0, 3};
+    terrain_mask4_uv[125] = {1, 3};
+    terrain_mask4_uv[119] = {2, 3};
+    terrain_mask4_uv[199] = {3, 3};
+    terrain_mask4_uv[215] = {4, 3};
+    terrain_mask4_uv[213] = {5, 3};
+    terrain_mask4_uv[81] = {6, 3};
+    terrain_mask4_uv[31] = {0, 4};
+    // terrain_mask4_uv[255] = {1, 4};
+    terrain_mask4_uv[241] = {2, 4};
+    terrain_mask4_uv[20] = {3, 4};
+    terrain_mask4_uv[65] = {4, 4};
+    terrain_mask4_uv[17] = {5, 4};
+    terrain_mask4_uv[1] = {6, 4};
+    terrain_mask4_uv[23] = {0, 5};
+    terrain_mask4_uv[223] = {1, 5};
+    terrain_mask4_uv[245] = {2, 5};
+    terrain_mask4_uv[85] = {3, 5};
+    terrain_mask4_uv[68] = {4, 5};
+    terrain_mask4_uv[93] = {5, 5};
+    terrain_mask4_uv[112] = {6, 5};
+    terrain_mask4_uv[5] = {0, 6};
+    terrain_mask4_uv[71] = {1, 6};
+    terrain_mask4_uv[197] = {2, 6};
+    terrain_mask4_uv[69] = {3, 6};
+    terrain_mask4_uv[64] = {4, 6};
+    terrain_mask4_uv[7] = {5, 6};
+    terrain_mask4_uv[193] = {6, 6};
+}
+
+SDL_FRect get_bitmask(Tile &tile)
+{
+    int mask = 0;
+
+    // Bit layout (matches bit index)
+    //  7 0 1
+    //  6   2
+    //  5 4 3
+
+    auto is_same = [&](int i) -> bool
+    {
+        return (tile.neighbors[i] < 0 || tile.type == tiles_data[tile.neighbors[i]].type);
+    };
+
+    // Cardinal directions
+    bool N = is_same(0);
+    bool E = is_same(2);
+    bool S = is_same(4);
+    bool W = is_same(6);
+
+    if (N)
+        mask |= (1 << 0);
+    if (E)
+        mask |= (1 << 2);
+    if (S)
+        mask |= (1 << 4);
+    if (W)
+        mask |= (1 << 6);
+
+    bool NE = is_same(1);
+    bool SE = is_same(3);
+    bool SW = is_same(5);
+    bool NW = is_same(7);
+
+    // Diagonals only if both adjacent cardinals are present
+    if (NE && N && E)
+        mask |= (1 << 1); // NE
+    if (SE && E && S)
+        mask |= (1 << 3); // SE
+    if (SW && S && W)
+        mask |= (1 << 5); // SW
+    if (NW && W && N)
+        mask |= (1 << 7); // NW
+
+    // Lookup UV
+    auto p = terrain_mask4_uv[mask];
+    if (p.x == 0 && p.y == 0 && mask != 0)
+    {
+        SDL_Log("Missing UV for bitmask %d", mask);
+    }
+
+    return {(float)p.x * TILE_SIZE, (float)p.y * TILE_SIZE, TILE_SIZE, TILE_SIZE};
 }
 
 void initialize_map(int noise_seed = 8917237861)
@@ -96,60 +200,73 @@ void initialize_map(int noise_seed = 8917237861)
         float fx = index % MAP_SIZE;
         float fy = index / MAP_SIZE;
 
+        tile.index = index;
+        tile.coord.x = fx;
+        tile.coord.y = fy;
+
+        tile.rect = {
+            static_cast<float>(tile.coord.x) * TILE_SIZE,
+            static_cast<float>(tile.coord.y) * TILE_SIZE,
+            static_cast<float>(TILE_SIZE),
+            static_cast<float>(TILE_SIZE)};
+
         float noise = stb_perlin_noise3_seed(fx * NOISE_SCALE, fy * NOISE_SCALE, 0.0f, 0, 0, 0, noise_seed);
         noise = (noise + 1.0f) * 0.5f;
 
-        if (noise < 0.3f)
+        if (noise < 0.5f)
         {
             tile.type = TileType::Water;
-        }
-        else if (noise < 0.6f)
-        {
-            tile.type = TileType::Sand;
         }
         else
         {
             tile.type = TileType::Grass;
         }
 
-        tile.index = index;
-
-        int x = fx;
-        int y = fy;
-
-        tile.rect = {
-            static_cast<float>(x) * TILE_SIZE,
-            static_cast<float>(y) * TILE_SIZE,
-            static_cast<float>(TILE_SIZE),
-            static_cast<float>(TILE_SIZE)};
-
-        tile.coord.x = x;
-        tile.coord.y = y;
-
-        tile.neighbors.fill(-1);
         set_neighbors(tile);
+        // else if (noise < 0.6f)
+        // {
+        //     tile.type = TileType::Sand;
+        // }
+        // else
+        // {
+        //     tile.type = TileType::Grass;
+        // }
     }
 
-    for (size_t index = 0; index < tiles_data.size(); ++index)
+    // Second pass: assign bitmask sprite now that all tiles have types
+    for (auto &tile : tiles_data)
     {
-        auto &tile = tiles_data[index];
-        if (tile.type == TileType::Water)
+        if (tile.type == TileType::Grass)
         {
-            bool dw = true;
-            for (auto n : tile.neighbors)
-            {
-                if (n >= 0 && tiles_data[n].type != TileType::Water)
-                {
-                    dw = false;
-                    break;
-                }
-            }
-            if (dw)
-            {
-                tile.type = TileType::DeepWater;
-            }
+            tile.sprite = get_bitmask(tile);
+            // SDL_Log("sprite: {%f, %f, %f, %f}", tile.sprite.x, tile.sprite.y, tile.sprite.w, tile.sprite.h);
+        }
+        else
+        {
+            tile.sprite = {0, 0, TILE_SIZE, TILE_SIZE}; // fallback if needed
         }
     }
+
+    // for (size_t index = 0; index < tiles_data.size(); ++index)
+    // {
+    //     auto &tile = tiles_data[index];
+    //     if (tile.type == TileType::Water)
+    //     {
+    //         bool dw = true;
+    //         for (auto n : tile.neighbors)
+    //         {
+    //             if (n >= 0 && tiles_data[n].type != TileType::Water)
+    //             {
+    //                 dw = false;
+    //                 break;
+    //             }
+    //         }
+    //         if (dw)
+    //         {
+    //             tile.type = TileType::DeepWater;
+    //         }
+    //     }
+    // }
 }
 
 Tile get_tile_from_coord(int x, int y)
@@ -271,8 +388,17 @@ void render_tile(GameContext &ctx, const Tile &tile)
 
     // SDL_RenderTexture(ctx.renderer, tile.bg, NULL, &tile.rect);
 
+    SDL_SetRenderDrawColor(ctx.renderer, 0xED, 0x6A, 0xFF, 255);
+    SDL_RenderFillRect(ctx.renderer, &tile.rect);
+
     switch (tile.type)
     {
+    case TileType::Water:
+    {
+        SDL_SetRenderDrawColor(ctx.renderer, 0xED, 0x6A, 0xFF, 255);
+        SDL_RenderFillRect(ctx.renderer, &tile.rect);
+        break;
+    }
     case TileType::Unknown:
     {
         SDL_SetRenderDrawColor(ctx.renderer, 0xED, 0x6A, 0xFF, 255);
@@ -282,7 +408,8 @@ void render_tile(GameContext &ctx, const Tile &tile)
 
     default:
     {
-        SDL_RenderTexture(ctx.renderer, tileset, &tileset_map.at(tile.type), &tile.rect);
+        // SDL_RenderTexture(ctx.renderer, tileset, &tileset_map.at(tile.type), &tile.rect);
+        SDL_RenderTexture(ctx.renderer, tileset_grass, &tile.sprite, &tile.rect);
         break;
     }
     }
@@ -424,13 +551,14 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     ImGui_ImplSDLRenderer3_Init(ctx->renderer);
     io.Fonts->AddFontDefault();
 
-    tileset = IMG_LoadTexture(ctx->renderer, "assets/tileset.png");
-    if (!tileset)
+    tileset_grass = IMG_LoadTexture(ctx->renderer, "assets/demo.png");
+    if (!tileset_grass)
     {
-        SDL_Log("Couldn't load tileset asset: %s\n", SDL_GetError());
+        SDL_Log("Couldn't load tileset_grass asset: %s\n", SDL_GetError());
         return SDL_APP_FAILURE;
     }
 
+    initialize_terrain_mask();
     initialize_map();
 
     // Initialize SDL, create window/renderer, load assets
