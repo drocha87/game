@@ -6,4 +6,4 @@
 
 #include "game.h"
 
-SDL_AppResult handle_events(GameContext &ctx, SDL_Event *event);
+SDL_AppResult handle_events(Game &ctx, SDL_Event *event);
