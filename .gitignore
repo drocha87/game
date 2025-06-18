@@ -74,3 +74,5 @@ cmake-build-*
 
 
 
+vendor/FastNoise2/bin/FastNoiseD.pdb
+vendor/FastNoise2/bin/NoiseTool.ini
