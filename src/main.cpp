@@ -14,45 +14,38 @@
 #include <backends/imgui_impl_sdl3.h>
 #include <backends/imgui_impl_sdlrenderer3.h>
 
-#define STB_PERLIN_IMPLEMENTATION
-#include "stb_perlin.h"
+#include <FastNoise/FastNoise.h>
+
+// #define STB_PERLIN_IMPLEMENTATION
+// #include "stb_perlin.h"
 
 #include "game.h"
 #include "events.h"
+#include "terrain.h"
+#include <random>
 
 static SDL_Color WHITE = {255, 255, 255, SDL_ALPHA_OPAQUE};
 static SDL_Color DEFAULT_BACKGROUND_COLOR = {0x18, 0x18, 0x18, SDL_ALPHA_OPAQUE};
 
-enum TileType : uint8_t
-{
-    Grass,
-    Sand,
-    Water,
-    DeepWater,
-    Unknown,
-};
-
 struct Tile
 {
-    TileType type;
-    size_t index;
+    std::unique_ptr<Terrain> terrain;
+
     SDL_FRect rect;
     SDL_FRect sprite;
     SDL_Point coord;
+
     std::array<int, 8> neighbors;
 };
 
 constexpr int TILE_SIZE = 32;
-constexpr int MAP_SIZE = 50;
+constexpr int MAP_SIZE = 10;
 constexpr int WORLD_WIDTH = MAP_SIZE * TILE_SIZE;
 constexpr int WORLD_HEIGHT = MAP_SIZE * TILE_SIZE;
-constexpr int TILES_FLAT_SIZE = MAP_SIZE * MAP_SIZE;
 
-constexpr Tile UnknownTile = {.type = TileType::Unknown};
-static std::array<Tile, TILES_FLAT_SIZE> tiles_data;
+static std::array<Tile, MAP_SIZE * MAP_SIZE> tiles_data;
 
 SDL_Texture *tileset_grass;
-static std::array<SDL_Point, 256> terrain_mask4_uv;
 
 void set_neighbors(Tile &tile)
 {
@@ -80,59 +73,117 @@ void set_neighbors(Tile &tile)
     }
 }
 
-void initialize_terrain_mask()
+SDL_Point get_terrain_mask(int mask)
 {
-    terrain_mask4_uv.fill({0, 0});
+    switch (mask)
+    {
+    case 0:
+        return {0, 0};
+    case 4:
+        return {1, 0};
+    case 84:
+        return {2, 0};
+    case 92:
+        return {3, 0};
+    case 124:
+        return {4, 0};
+    case 116:
+        return {5, 0};
+    case 80:
+        return {6, 0};
+    case 16:
+        return {0, 1};
+    case 28:
+        return {1, 1};
+    case 117:
+        return {2, 1};
+    case 95:
+        return {3, 1};
+    case 255:
+    {
+        static const std::array<SDL_Point, 3> options = {{{4, 2},
+                                                          {1, 4},
+                                                          {4, 1}}};
 
-    terrain_mask4_uv[0] = {0, 0};
-    terrain_mask4_uv[4] = {1, 0};
-    terrain_mask4_uv[84] = {2, 0};
-    terrain_mask4_uv[92] = {3, 0};
-    terrain_mask4_uv[124] = {4, 0};
-    terrain_mask4_uv[116] = {5, 0};
-    terrain_mask4_uv[80] = {6, 0};
-    terrain_mask4_uv[16] = {0, 1};
-    terrain_mask4_uv[28] = {1, 1};
-    terrain_mask4_uv[117] = {2, 1};
-    terrain_mask4_uv[95] = {3, 1};
-    terrain_mask4_uv[255] = {4, 1};
-    terrain_mask4_uv[253] = {5, 1};
-    terrain_mask4_uv[113] = {6, 1};
-    terrain_mask4_uv[21] = {0, 2};
-    terrain_mask4_uv[87] = {1, 2};
-    terrain_mask4_uv[221] = {2, 2};
-    terrain_mask4_uv[127] = {3, 2};
-    // terrain_mask4_uv[255] = {4, 2};
-    terrain_mask4_uv[247] = {5, 2};
-    terrain_mask4_uv[209] = {6, 2};
-    terrain_mask4_uv[29] = {0, 3};
-    terrain_mask4_uv[125] = {1, 3};
-    terrain_mask4_uv[119] = {2, 3};
-    terrain_mask4_uv[199] = {3, 3};
-    terrain_mask4_uv[215] = {4, 3};
-    terrain_mask4_uv[213] = {5, 3};
-    terrain_mask4_uv[81] = {6, 3};
-    terrain_mask4_uv[31] = {0, 4};
-    // terrain_mask4_uv[255] = {1, 4};
-    terrain_mask4_uv[241] = {2, 4};
-    terrain_mask4_uv[20] = {3, 4};
-    terrain_mask4_uv[65] = {4, 4};
-    terrain_mask4_uv[17] = {5, 4};
-    terrain_mask4_uv[1] = {6, 4};
-    terrain_mask4_uv[23] = {0, 5};
-    terrain_mask4_uv[223] = {1, 5};
-    terrain_mask4_uv[245] = {2, 5};
-    terrain_mask4_uv[85] = {3, 5};
-    terrain_mask4_uv[68] = {4, 5};
-    terrain_mask4_uv[93] = {5, 5};
-    terrain_mask4_uv[112] = {6, 5};
-    terrain_mask4_uv[5] = {0, 6};
-    terrain_mask4_uv[71] = {1, 6};
-    terrain_mask4_uv[197] = {2, 6};
-    terrain_mask4_uv[69] = {3, 6};
-    terrain_mask4_uv[64] = {4, 6};
-    terrain_mask4_uv[7] = {5, 6};
-    terrain_mask4_uv[193] = {6, 6};
+        static std::random_device rd;
+        static std::mt19937 rng(rd());
+        static std::uniform_int_distribution<std::size_t> dist(0, options.size() - 1);
+
+        return options[dist(rng)];
+    }
+    case 253:
+        return {5, 1};
+    case 113:
+        return {6, 1};
+    case 21:
+        return {0, 2};
+    case 87:
+        return {1, 2};
+    case 221:
+        return {2, 2};
+    case 127:
+        return {3, 2};
+    case 247:
+        return {5, 2};
+    case 209:
+        return {6, 2};
+    case 29:
+        return {0, 3};
+    case 125:
+        return {1, 3};
+    case 119:
+        return {2, 3};
+    case 199:
+        return {3, 3};
+    case 215:
+        return {4, 3};
+    case 213:
+        return {5, 3};
+    case 81:
+        return {6, 3};
+    case 31:
+        return {0, 4};
+    case 241:
+        return {2, 4};
+    case 20:
+        return {3, 4};
+    case 65:
+        return {4, 4};
+    case 17:
+        return {5, 4};
+    case 1:
+        return {6, 4};
+    case 23:
+        return {0, 5};
+    case 223:
+        return {1, 5};
+    case 245:
+        return {2, 5};
+    case 85:
+        return {3, 5};
+    case 68:
+        return {4, 5};
+    case 93:
+        return {5, 5};
+    case 112:
+        return {6, 5};
+    case 5:
+        return {0, 6};
+    case 71:
+        return {1, 6};
+    case 197:
+        return {2, 6};
+    case 69:
+        return {3, 6};
+    case 64:
+        return {4, 6};
+    case 7:
+        return {5, 6};
+    case 193:
+        return {6, 6};
+    default:
+        return {0, 0};
+    }
 }
 
 SDL_FRect get_bitmask(Tile &tile)
@@ -146,7 +197,7 @@ SDL_FRect get_bitmask(Tile &tile)
 
     auto is_same = [&](int i) -> bool
     {
-        return (tile.neighbors[i] < 0 || tile.type == tiles_data[tile.neighbors[i]].type);
+        return (tile.neighbors[i] < 0 || tile.terrain->kind == tiles_data[tile.neighbors[i]].terrain->kind);
     };
 
     // Cardinal directions
@@ -180,7 +231,7 @@ SDL_FRect get_bitmask(Tile &tile)
         mask |= (1 << 7); // NW
 
     // Lookup UV
-    auto p = terrain_mask4_uv[mask];
+    auto p = get_terrain_mask(mask);
     if (p.x == 0 && p.y == 0 && mask != 0)
     {
         SDL_Log("Missing UV for bitmask %d", mask);
@@ -189,9 +240,28 @@ SDL_FRect get_bitmask(Tile &tile)
     return {(float)p.x * TILE_SIZE, (float)p.y * TILE_SIZE, TILE_SIZE, TILE_SIZE};
 }
 
-void initialize_map(int noise_seed = 8917237861)
+// static float noise_map[MAP_SIZE * MAP_SIZE] = {};
+
+FastNoise::SmartNode<FastNoise::FractalRidged> noise_generator;
+
+void initialize_noise_generator()
 {
-    constexpr float NOISE_SCALE = 0.2f;
+    auto fnSimplex = FastNoise::New<FastNoise::Simplex>();
+    noise_generator = FastNoise::New<FastNoise::FractalRidged>();
+
+    // fnSimplex->GenUniformGrid2D(noise_map, 0, 0, MAP_SIZE, MAP_SIZE, 0.09f, seed);
+    noise_generator->SetSource(fnSimplex);
+    noise_generator->SetGain(0.6f);
+    noise_generator->SetLacunarity(2.0f);
+    noise_generator->SetOctaveCount(4);
+
+    // noise_generator->GenUniformGrid2D(noise_map, 0, 0, MAP_SIZE, MAP_SIZE, 1.0f, seed);
+    // noise_generator->GenSingle2D(noise_map, 0, 0, MAP_SIZE, MAP_SIZE, 1.0f, seed);
+}
+
+void initialize_map(int noise_seed = 12237861)
+{
+    initialize_noise_generator();
 
     for (size_t index = 0; index < tiles_data.size(); ++index)
     {
@@ -200,7 +270,6 @@ void initialize_map(int noise_seed = 8917237861)
         float fx = index % MAP_SIZE;
         float fy = index / MAP_SIZE;
 
-        tile.index = index;
         tile.coord.x = fx;
         tile.coord.y = fy;
 
@@ -210,33 +279,29 @@ void initialize_map(int noise_seed = 8917237861)
             static_cast<float>(TILE_SIZE),
             static_cast<float>(TILE_SIZE)};
 
-        float noise = stb_perlin_noise3_seed(fx * NOISE_SCALE, fy * NOISE_SCALE, 0.0f, 0, 0, 0, noise_seed);
-        noise = (noise + 1.0f) * 0.5f;
+        float noise = 1.0f; // noise_generator->GenSingle2D(fx, fy, noise_seed);
+        // noise = fabs(noise);
+
+        // float noise = noise_map[y * MAP_SIZE + x]; // fbm_noise(fx * NOISE_SCALE, fy * NOISE_SCALE, noise_seed);
+        // stb_perlin_noise3_seed(fx * NOISE_SCALE, fy * NOISE_SCALE, 0.0f, 0, 0, 0, noise_seed);
+        //  noise = (noise + 1.0f) * 0.5f;
 
         if (noise < 0.5f)
         {
-            tile.type = TileType::Water;
+            tile.terrain = std::make_unique<Water>(Water::Depth::Shallow);
         }
         else
         {
-            tile.type = TileType::Grass;
+            tile.terrain = std::make_unique<Land>(Land::Type::Dirt);
         }
 
         set_neighbors(tile);
-        // else if (noise < 0.6f)
-        // {
-        //     tile.type = TileType::Sand;
-        // }
-        // else
-        // {
-        //     tile.type = TileType::Grass;
-        // }
     }
 
     // Second pass: assign bitmask sprite now that all tiles have types
     for (auto &tile : tiles_data)
     {
-        if (tile.type == TileType::Grass)
+        if (tile.terrain->kind == TerrainKind::Liquid)
         {
             tile.sprite = get_bitmask(tile);
             // SDL_Log("sprite: {%f, %f, %f, %f}", tile.sprite.x, tile.sprite.y, tile.sprite.w, tile.sprite.h);
@@ -267,16 +332,6 @@ void initialize_map(int noise_seed = 8917237861)
     //         }
     //     }
     // }
-}
-
-Tile get_tile_from_coord(int x, int y)
-{
-    size_t index = y * MAP_SIZE + x;
-    if (tiles_data.size() > index)
-    {
-        return tiles_data.at(index);
-    }
-    return UnknownTile;
 }
 
 void update_mouse(GameContext *ctx)
@@ -371,53 +426,31 @@ void render_fps(GameContext &ctx)
 
 void render_tile(GameContext &ctx, const Tile &tile)
 {
-    // @todo: add more context to tiles
-    // static char buffer[128] = {0};
-    // Text output = {0};
+    const SDL_FPoint point = ctx.world_camera->screen_to_world(ctx.mouse_point);
 
-    // SDL_FRect cell = {x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE};
-
-    // snprintf(buffer, sizeof buffer, "%zu", tile.index);
-    // if (prepare_text(ctx, buffer, 12, WHITE, &output))
-    // {
-    //     output.rect.x = tile.rect.x;
-    //     output.rect.y = tile.rect.y;
-    //     render_text(ctx, &output);
-    //     destroy_text(&output);
-    // }
-
-    // SDL_RenderTexture(ctx.renderer, tile.bg, NULL, &tile.rect);
-
-    SDL_SetRenderDrawColor(ctx.renderer, 0xED, 0x6A, 0xFF, 255);
+    if (SDL_PointInRectFloat(&point, &tile.rect))
+    {
+        SDL_Log("(screen x = %f, y = %f)", point.x, point.y);
+        SDL_SetRenderDrawColor(ctx.renderer, 0xFF, 0x00, 0x00, 255);
+    }
+    else
+    {
+        SDL_SetRenderDrawColor(ctx.renderer, 0xED, 0x6A, 0xFF, 255);
+    }
     SDL_RenderFillRect(ctx.renderer, &tile.rect);
-
-    switch (tile.type)
-    {
-    case TileType::Water:
-    {
-        SDL_SetRenderDrawColor(ctx.renderer, 0xED, 0x6A, 0xFF, 255);
-        SDL_RenderFillRect(ctx.renderer, &tile.rect);
-        break;
-    }
-    case TileType::Unknown:
-    {
-        SDL_SetRenderDrawColor(ctx.renderer, 0xED, 0x6A, 0xFF, 255);
-        SDL_RenderFillRect(ctx.renderer, &tile.rect);
-        break;
-    }
-
-    default:
-    {
-        // SDL_RenderTexture(ctx.renderer, tileset, &tileset_map.at(tile.type), &tile.rect);
-        SDL_RenderTexture(ctx.renderer, tileset_grass, &tile.sprite, &tile.rect);
-        break;
-    }
-    }
+    // if (tile.terrain->kind == TerrainKind::Liquid)
+    // {
+    //     SDL_RenderTexture(ctx.renderer, tileset_grass, &tile.sprite, &tile.rect);
+    // }
 }
 
 void render_world(GameContext &ctx)
 {
     SDL_SetRenderTarget(ctx.renderer, ctx.world_layer_texture);
+    // Apply world camera transformations to the renderer
+    SDL_SetRenderScale(ctx.renderer, ctx.world_camera->zoom, ctx.world_camera->zoom);
+
+    // @fixme: I think we could avoid this RenderClear since we will render in the entire texture anyway
     SDL_SetRenderDrawColor(
         ctx.renderer,
         DEFAULT_BACKGROUND_COLOR.r,
@@ -427,24 +460,27 @@ void render_world(GameContext &ctx)
 
     SDL_RenderClear(ctx.renderer);
 
-    // Apply world camera transformations to the renderer
-    SDL_SetRenderScale(ctx.renderer, ctx.zoom_scale, ctx.zoom_scale);
-
-    // Remember that SDL_RenderCopyEx takes source/destination rectangles.
-    // You'll need to calculate these based on your worldCameraX/Y and worldCameraZoom.
-    // For drawing individual world elements, you'd translate their coordinates:
-    // SDL_FRect worldDestRect = { spriteX - worldCameraX, spriteY - worldCameraY, spriteWidth, spriteHeight };
-    // SDL_RenderTexture(ctx.renderer, spriteTexture, NULL, &worldDestRect);
-    // Or you can use SDL_SetRenderLogicalPresentation(ctx.renderer, width, height, SDL_RendererLogicalPresentationMode::SDL_LOGICAL_PRESENTATION_LINEAR);
-    // and then just move the world's origin.
-
     for (auto &tile : tiles_data)
     {
         render_tile(ctx, tile);
     }
 
-    // Reset scale if you only want it for the world texture.
-    // SDL_SetRenderScale(ctx.renderer, 1.0f, 1.0f);
+    if (ctx.world_camera->render_grid)
+    {
+        SDL_SetRenderDrawColor(ctx.renderer, 0xfa, 0xfa, 0xfa, 0xff);
+        for (int i = 0; i < MAP_SIZE; i++)
+        {
+            // render horizontal grid line
+            float x = 0;
+            float y = i * TILE_SIZE;
+            SDL_RenderLine(ctx.renderer, x, y, MAP_SIZE * TILE_SIZE, y);
+
+            // render vertical grid line
+            x = i * TILE_SIZE;
+            y = 0;
+            SDL_RenderLine(ctx.renderer, x, y, x, MAP_SIZE * TILE_SIZE);
+        }
+    }
 
     // 2. Reset Render Target to Window
     SDL_SetRenderTarget(ctx.renderer, NULL);
@@ -459,111 +495,104 @@ void render_world(GameContext &ctx)
 
     SDL_RenderClear(ctx.renderer);
 
-    int rw, rh;
-    SDL_GetRenderOutputSize(ctx.renderer, &rw, &rh);
-
-    // Draw the world layer (potentially with its own final scaling/positioning on the screen)
-    // @fixme: do not render the entire world if it is out of the screen
-    SDL_FRect world_display_rect = {ctx.camera_x, ctx.camera_y, (float)WORLD_WIDTH, (float)WORLD_HEIGHT};
-    SDL_RenderTexture(ctx.renderer, ctx.world_layer_texture, NULL, &world_display_rect); // Blit the entire world texture to the screen
-
+    SDL_RenderTexture(ctx.renderer, ctx.world_layer_texture, NULL, &ctx.world_camera->viewport);
     // Present the final rendered frame
     // SDL_RenderPresent(ctx.renderer);
 }
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
-    GameContext *ctx = new GameContext();
-    *appstate = ctx;
+  SDL_Window *window;
+  SDL_Renderer *renderer;
+  int screen_width = 1024;
+  int screen_height = 800;
 
-    // @note: ensure that the game starts with the zoom scaled to 1
-    ctx->zoom_scale = 1;
-    ctx->last_time = SDL_GetTicks();
-
-    if (!SDL_Init(SDL_INIT_VIDEO))
+  if (!SDL_Init(SDL_INIT_VIDEO))
     {
-        SDL_Log("Couldn't initialise SDL: %s\n", SDL_GetError());
-        return SDL_APP_FAILURE;
+      SDL_Log("Couldn't initialise SDL: %s\n", SDL_GetError());
+      return SDL_APP_FAILURE;
     }
 
-    if (!TTF_Init())
+  if (!TTF_Init())
     {
-        SDL_Log("Couldn't initialise SDL_ttf: %s\n", SDL_GetError());
-        return SDL_APP_FAILURE;
+      SDL_Log("Couldn't initialise SDL_ttf: %s\n", SDL_GetError());
+      return SDL_APP_FAILURE;
     }
 
-    // Load font
-    const char *fontPath = "font.ttf";
-    if (ctx->font = TTF_OpenFont(fontPath, 28); ctx->font == nullptr)
+  if (!SDL_CreateWindowAndRenderer("Diego Rocha", screen_width, screen_height, 0, &window, &renderer))
     {
-        SDL_Log("Could not load %s! SDL_ttf Error: %s\n", fontPath, SDL_GetError());
-        return SDL_APP_FAILURE;
+      SDL_Log("Couldn't create window and renderer: %s\n", SDL_GetError());
+      return SDL_APP_FAILURE;
     }
 
-    if (!SDL_CreateWindowAndRenderer("BADI", 1024, 800, 0, &ctx->window, &ctx->renderer))
+  SDL_SetWindowResizable(window, false);
+  SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+
+  // @todo: put it in a configuration
+  if (SDL_SetRenderVSync(renderer, 1) == false)
     {
-        SDL_Log("Couldn't create window and renderer: %s\n", SDL_GetError());
-        return SDL_APP_FAILURE;
+      SDL_Log("Could not enable VSync! SDL error: %s\n", SDL_GetError());
+      return SDL_APP_FAILURE;
     }
 
-    SDL_SetWindowResizable(ctx->window, false);
-    SDL_SetWindowPosition(ctx->window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-
-    // @todo: put it in a configuration
-    if (SDL_SetRenderVSync(ctx->renderer, 1) == false)
+  if (!SDL_CaptureMouse(true))
     {
-        SDL_Log("Could not enable VSync! SDL error: %s\n", SDL_GetError());
-        return SDL_APP_FAILURE;
+      SDL_Log("Could not capture mouse: %s\n", SDL_GetError());
+      return SDL_APP_FAILURE;
     }
 
-    ctx->world_layer_texture = SDL_CreateTexture(ctx->renderer,
-                                                 SDL_PIXELFORMAT_RGBA8888,
-                                                 SDL_TEXTUREACCESS_TARGET,
-                                                 WORLD_WIDTH,
-                                                 WORLD_HEIGHT);
-    if (!ctx->world_layer_texture)
+  const char *fontPath = "font.ttf";
+  TTF_Font *font = TTF_OpenFont(fontPath, 28);
+  if (!font)
     {
-        SDL_Log("Could not create world layer: %s\n", SDL_GetError());
-        return SDL_APP_FAILURE;
-    }
-    // @note: set it for transparency
-    // SDL_SetTextureBlendMode(ctx->world_layer_texture, SDL_BLENDMODE_BLEND);
-
-    if (!SDL_CaptureMouse(true))
-    {
-        SDL_Log("Could not capture mouse: %s\n", SDL_GetError());
-        return SDL_APP_FAILURE;
+      SDL_Log("Could not load %s! SDL_ttf Error: %s\n", fontPath, SDL_GetError());
+      return SDL_APP_FAILURE;
     }
 
-    // setup ImGUI
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO &io = ImGui::GetIO();
-    (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
+  // setup ImGUI
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  (void)io;
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
 
-    // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
+  // Setup Dear ImGui style
+  ImGui::StyleColorsDark();
 
-    // Setup Platform/Renderer backends
-    ImGui_ImplSDL3_InitForSDLRenderer(ctx->window, ctx->renderer);
-    ImGui_ImplSDLRenderer3_Init(ctx->renderer);
-    io.Fonts->AddFontDefault();
+  // Setup Platform/Renderer backends
+  ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
+  ImGui_ImplSDLRenderer3_Init(renderer);
+  io.Fonts->AddFontDefault();
 
-    tileset_grass = IMG_LoadTexture(ctx->renderer, "assets/demo.png");
-    if (!tileset_grass)
+  auto world_layer_texture = SDL_CreateTexture(renderer,
+                                               SDL_PIXELFORMAT_RGBA8888,
+                                               SDL_TEXTUREACCESS_TARGET,
+                                               WORLD_WIDTH,
+                                               WORLD_HEIGHT);
+
+  if (!world_layer_texture)
     {
-        SDL_Log("Couldn't load tileset_grass asset: %s\n", SDL_GetError());
-        return SDL_APP_FAILURE;
+      SDL_Log("Could not create world layer: %s\n", SDL_GetError());
+      return SDL_APP_FAILURE;
+    }
+  // @note: set it for transparency
+  // SDL_SetTextureBlendMode(ctx->world_layer_texture, SDL_BLENDMODE_BLEND);
+
+  auto game_context = new GameContext(screen_width, screen_height, window, renderer, world_layer_texture, font);
+  *appstate = game_context;
+  if (!game_context->load_assets())
+    {
+      SDL_Log("Couldn't load tileset_grass asset: %s\n", SDL_GetError());
+      return SDL_APP_FAILURE;
     }
 
-    initialize_terrain_mask();
-    initialize_map();
+  // initialize_terrain_mask();
+  initialize_map();
 
-    // Initialize SDL, create window/renderer, load assets
-    // Set up *appstate if you want to avoid global variables
-    return SDL_APP_CONTINUE; // Or SDL_APP_FAILURE on error
+  // Initialize SDL, create window/renderer, load assets
+  // Set up *appstate if you want to avoid global variables
+  return SDL_APP_CONTINUE; // Or SDL_APP_FAILURE on error
 }
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
@@ -602,7 +631,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     //     ctx->should_scale = false;
     // }
 
-    update_mouse(ctx);
+    // update_mouse(ctx);
 
     // if (0)
     // {
@@ -676,14 +705,18 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
     GameContext *ctx = static_cast<GameContext *>(appstate);
-    TTF_CloseFont(ctx->font);
 
     ImGui_ImplSDLRenderer3_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
 
-    SDL_DestroyRenderer(ctx->renderer);
-    SDL_DestroyWindow(ctx->window);
+    if (ctx)
+    {
+        TTF_CloseFont(ctx->font);
+        SDL_DestroyRenderer(ctx->renderer);
+        SDL_DestroyWindow(ctx->window);
+    }
+
     TTF_Quit();
     SDL_Quit();
 }
