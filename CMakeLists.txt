@@ -6,12 +6,12 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 
 add_executable (Game
   ${SOURCES}
-  vendor/imgui-1.91.9b/imgui.cpp
-  vendor/imgui-1.91.9b/imgui_draw.cpp
-  vendor/imgui-1.91.9b/imgui_tables.cpp
-  vendor/imgui-1.91.9b/imgui_widgets.cpp
-  vendor/imgui-1.91.9b/backends/imgui_impl_sdl3.cpp
-  vendor/imgui-1.91.9b/backends/imgui_impl_sdlrenderer3.cpp
+  # vendor/imgui-1.91.9b/imgui.cpp
+  # vendor/imgui-1.91.9b/imgui_draw.cpp
+  # vendor/imgui-1.91.9b/imgui_tables.cpp
+  # vendor/imgui-1.91.9b/imgui_widgets.cpp
+  # vendor/imgui-1.91.9b/backends/imgui_impl_sdl3.cpp
+  # vendor/imgui-1.91.9b/backends/imgui_impl_sdlrenderer3.cpp
 )
 target_include_directories(Game PRIVATE src)
 
