@@ -19,12 +19,10 @@ static SDL_Color DEFAULT_BACKGROUND_COLOR = {0x18, 0x18, 0x18, SDL_ALPHA_OPAQUE}
 struct Tile
 {
   std::unique_ptr<Terrain> terrain;
-
   SDL_FRect rect;
   SDL_FRect sprite;
   SDL_Point coord;
-
-  std::array<int, 8> neighbors;
+  bool selected;
 };
 
 class Game
@@ -37,6 +35,9 @@ class Game
   const int height = tile_size * map_size;
   
  public:
+  const int TARGET_FPS = 30;
+  const double TARGET_FRAME_TIME = 1.0f / TARGET_FPS;
+  
   SDL_Window *window;
   SDL_Renderer *renderer;
   TTF_Font *font;
@@ -46,7 +47,9 @@ class Game
   std::array<Tile, map_size * map_size> tiles;
   
   // timer related variables
-  Uint64 last_time;
+  Uint64 prev_time, curr_time;
+  double delta_time;
+  double frequency;
   
   SDL_FRect viewport; // Where the world is drawn on screen
   
@@ -60,11 +63,10 @@ class Game
   bool render_grid = false;
     
  Game(SDL_Window *window, SDL_Renderer *renderer, TTF_Font *font)
-   : window(window),
-    renderer(renderer),
-    font(font),
-    last_time(SDL_GetTicks())
+   : window(window), renderer(renderer), font(font), frequency((double)SDL_GetPerformanceFrequency())
     {
+      prev_time = SDL_GetPerformanceCounter();
+      curr_time = prev_time;
     }
 
   ~Game()
@@ -88,11 +90,25 @@ class Game
   
   // @fixme: do not do this like this
   SDL_Texture *grass;
+  SDL_Texture *frame;
 
   bool load_assets()
   {
     grass = IMG_LoadTexture(renderer, "assets/demo.png");
-    return !!grass;
+    if (!grass)
+      {
+        SDL_Log("ERROR: could not load asset grass: %s", SDL_GetError());
+        return false;
+      }
+    
+    frame = IMG_LoadTexture(renderer, "assets/frame.png");
+    if (!frame)
+      {
+        SDL_Log("ERROR: could not load asset frame: %s", SDL_GetError());
+        return false;
+      }
+        
+    return true;
   }
 
 
@@ -100,7 +116,7 @@ class Game
   {
     float x = (screen_point.x - viewport.x) / zoom;
     float y = (screen_point.y - viewport.y) / zoom;
-    return {x, y};
+    return {x+0.2f, y+0.2f};
   }
 
   void handle_mouse_wheel(int mouse_screen_x, int mouse_screen_y, float wheel_y)
@@ -146,10 +162,11 @@ class Game
     snap_offset.y = motion.y;
   }
 
-  void set_neighbors(Tile &tile)
+  std::array<int, 8> get_neighbors(Tile &tile)
   {
-    tile.neighbors.fill(-1);
-    const std::array<SDL_Point, 8> offset = {{
+    std::array<int, 8> neighbors;
+    
+    constexpr std::array<SDL_Point, 8> offset = {{
         {0, -1},  // top
         {1, -1},  // top-right
         {1, 0},   // right
@@ -167,9 +184,11 @@ class Game
 
         if (nx >= 0 && ny >= 0 && nx < map_size && ny < map_size)
           {
-            tile.neighbors[i] = ny * map_size + nx;
+            neighbors[i] = ny * map_size + nx;
           }
       }
+
+    return neighbors;
   }
 
   SDL_Point get_terrain_mask(int mask)
@@ -287,6 +306,8 @@ class Game
 
   SDL_FRect get_bitmask(Tile &tile)
   {
+    auto neighbors = get_neighbors(tile);
+    
     int mask = 0;
 
     // Bit layout (matches bit index)
@@ -296,7 +317,7 @@ class Game
 
     auto is_same = [&](int i) -> bool
       {
-        return (tile.neighbors[i] < 0 || tile.terrain->kind == tiles[tile.neighbors[i]].terrain->kind);
+        return (neighbors[i] < 0 || tile.terrain->kind == tiles[neighbors[i]].terrain->kind);
       };
 
     // Cardinal directions
@@ -341,27 +362,23 @@ class Game
 
   void render_fps()
   {
-    static Uint64 fps = 0, elapsed = 0;
     static char buffer[128] = {0};
-
-    Uint64 current_time, frame_time;
-
-    current_time = SDL_GetTicks();
-    frame_time = current_time - last_time;
-    last_time = current_time;
-
+    static Uint64 fps = 0;
+    static double elapsed = 0;
+    
+    double frame_time = (curr_time - prev_time) / frequency;
     elapsed += frame_time;
 
-    if (elapsed >= 5000)
+    if (elapsed >= 2.0f)
       {
         elapsed = 0;
-        fps = (Uint32)(1000.0f / frame_time);
+        fps = (Uint32)(1 / frame_time);
       }
 
     int rw, rh;
     SDL_GetCurrentRenderOutputSize(renderer, &rw, &rh);
 
-    snprintf(buffer, sizeof buffer, "FPS: %zu, tile: (%d, %d)", fps, tile_on_mouse->coord.x, tile_on_mouse->coord.y);
+    snprintf(buffer, sizeof buffer, "FFPS: %zu, tile: (%d, %d)", fps, tile_on_mouse->coord.x, tile_on_mouse->coord.y);
     Text t = {0};
     if (prepare_text(buffer, 12, WHITE, &t))
       {
@@ -478,18 +495,30 @@ class Game
   void render_tile(Tile &tile)
   {
     const SDL_FPoint point = screen_to_world(mouse_position);
+    
+    SDL_SetRenderDrawColor(renderer, 0xED, 0x6A, 0xFF, 255);
+    SDL_RenderFillRect(renderer, &tile.rect);
 
-    if (SDL_PointInRectFloat(&point, &tile.rect))
+    if (tile.selected)
       {
-        tile_on_mouse = &tile;
-        SDL_Log("(screen x = %f, y = %f)", point.x, point.y);
-        SDL_SetRenderDrawColor(renderer, 0x00, 0xFF, 0x00, 255);
+        tile.terrain->kind = TerrainKind::Liquid;
+        SDL_FRect bitmask = get_bitmask(tile);
+        SDL_RenderTexture(renderer, grass, &bitmask, &tile.rect);
       }
     else
       {
-        SDL_SetRenderDrawColor(renderer, 0xED, 0x6A, 0xFF, 255);
+        tile.terrain->kind = TerrainKind::Solid;
       }
-    SDL_RenderFillRect(renderer, &tile.rect);
+    
+    if (SDL_PointInRectFloat(&point, &tile.rect))
+      {
+        tile_on_mouse = &tile;
+        SDL_RenderTexture(renderer, frame, nullptr, &tile.rect);
+      }
+
+    SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 255);
+    SDL_RenderLine(renderer, point.x, 0, point.x, map_size * tile_size);
+    SDL_RenderLine(renderer, 0, point.y, map_size * tile_size, point.y);
   }
 
   FastNoise::SmartNode<FastNoise::FractalRidged> noise_generator;
@@ -511,7 +540,7 @@ class Game
 
   void initialize_map(int noise_seed = 12237861)
   {
-    initialize_noise_generator();
+    // initialize_noise_generator();
 
     for (size_t index = 0; index < tiles.size(); ++index)
       {
@@ -536,16 +565,18 @@ class Game
         // stb_perlin_noise3_seed(fx * NOISE_SCALE, fy * NOISE_SCALE, 0.0f, 0, 0, 0, noise_seed);
         //  noise = (noise + 1.0f) * 0.5f;
 
-        if (noise < 0.5f)
-          {
-            tile.terrain = std::make_unique<Water>(Water::Depth::Shallow);
-          }
-        else
-          {
-            tile.terrain = std::make_unique<Land>(Land::Type::Dirt);
-          }
+        tile.terrain = std::make_unique<Land>(Land::Type::Dirt);
+        // if (noise < 0.5f)
+        //   {
+        //     tile.terrain = std::make_unique<Water>(Water::Depth::Shallow);
+        //   }
+        // else
+        //   {
+        //     tile.terrain = std::make_unique<Land>(Land::Type::Dirt);
+        //   }
+        tile.selected = false;
 
-        set_neighbors(tile);
+        // set_neighbors(tile);
       }
 
     // Second pass: assign bitmask sprite now that all tiles have types

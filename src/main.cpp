@@ -37,11 +37,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
   SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
   // @todo: put it in a configuration
-  if (SDL_SetRenderVSync(renderer, 1) == false)
-    {
-      SDL_Log("Could not enable VSync! SDL error: %s\n", SDL_GetError());
-      return SDL_APP_FAILURE;
-    }
+  // if (SDL_SetRenderVSync(renderer, 1) == false)
+  //   {
+  //     SDL_Log("Could not enable VSync! SDL error: %s\n", SDL_GetError());
+  //     return SDL_APP_FAILURE;
+  //   }
   
   //SDL_SetRenderLogicalPresentation(renderer, logical_width, logical_height, SDL_LOGICAL_PRESENTATION_LETTERBOX);
   
@@ -97,7 +97,21 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
   Game *game = static_cast<Game *>(appstate);
-  return game->render();
+  
+  game->prev_time = game->curr_time;
+  game->curr_time = SDL_GetPerformanceCounter();
+  game->delta_time = (double)(game->prev_time - game->curr_time) / game->frequency;
+  
+  auto result = game->render();
+  if (result != SDL_APP_CONTINUE) return result;
+
+  double frame_time = (double)(SDL_GetPerformanceCounter() - game->curr_time) / game->frequency;
+  // SDL_Log("frame took %fms", frame_time); 
+  if (frame_time < game->TARGET_FRAME_TIME) {
+    SDL_Delay((Uint32)((game->TARGET_FRAME_TIME - frame_time) * 1000.0));
+  }
+
+  return SDL_APP_CONTINUE;
 }
 
 void SDL_AppQuit(void *appstate, SDL_AppResult result)

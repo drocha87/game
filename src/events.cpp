@@ -60,11 +60,16 @@ SDL_AppResult handle_events(Game &game, SDL_Event *event)
   {
     SDL_MouseButtonEvent &mouse = event->button;
     if (mouse.button == SDL_BUTTON_MIDDLE)
-    {
-      game.snapping = false;
-      game.snap_offset.x = 0;
-      game.snap_offset.y = 0;
-    }
+      {
+        game.snapping = false;
+        game.snap_offset.x = 0;
+        game.snap_offset.y = 0;
+      }
+    else if (mouse.button == SDL_BUTTON_LEFT)
+      {
+        game.tile_on_mouse->selected = !game.tile_on_mouse->selected;
+      }
+
     break;
   }
 
