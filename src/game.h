@@ -11,19 +11,9 @@
 
 #include <FastNoise/FastNoise.h>
 
-#include "terrain.h"
+#include "tile.h"
 
 static SDL_Color WHITE = {255, 255, 255, SDL_ALPHA_OPAQUE};
-static SDL_Color DEFAULT_BACKGROUND_COLOR = {0x18, 0x18, 0x18, SDL_ALPHA_OPAQUE};
-
-struct Tile
-{
-  std::unique_ptr<Terrain> terrain;
-  SDL_FRect rect;
-  SDL_FRect sprite;
-  SDL_Point coord;
-  bool selected;
-};
 
 class Game
 {
@@ -317,7 +307,7 @@ class Game
 
     auto is_same = [&](int i) -> bool
       {
-        return (neighbors[i] < 0 || tile.terrain->kind == tiles[neighbors[i]].terrain->kind);
+        return (neighbors[i] < 0 || tile.kind == tiles[neighbors[i]].kind);
       };
 
     // Cardinal directions
@@ -446,7 +436,7 @@ class Game
     SDL_SetRenderScale(renderer, zoom, zoom);
 
     // @fixme: I think we could avoid this RenderClear since we will render in the entire texture anyway
-    SDL_SetRenderDrawColor(renderer, DEFAULT_BACKGROUND_COLOR.r, DEFAULT_BACKGROUND_COLOR.g, DEFAULT_BACKGROUND_COLOR.b, DEFAULT_BACKGROUND_COLOR.a);
+    SDL_SetRenderDrawColor(renderer, SDL_COLOR_RGBA(TERRAIN_COLORS[TerrainKind::Crust]));
     SDL_RenderClear(renderer);
 
     for (auto &tile : tiles)
@@ -475,7 +465,7 @@ class Game
     SDL_SetRenderTarget(renderer, NULL);
 
     // 3. Compose everything on the main renderer
-    SDL_SetRenderDrawColor(renderer, DEFAULT_BACKGROUND_COLOR.r, DEFAULT_BACKGROUND_COLOR.g, DEFAULT_BACKGROUND_COLOR.b, DEFAULT_BACKGROUND_COLOR.a);
+    SDL_SetRenderDrawColor(renderer, SDL_COLOR_RGBA(TERRAIN_COLORS[TerrainKind::Crust]));
     SDL_RenderClear(renderer);
     
     SDL_RenderTexture(renderer, world_texture, NULL, &viewport);
@@ -501,13 +491,13 @@ class Game
 
     if (tile.selected)
       {
-        tile.terrain->kind = TerrainKind::Liquid;
+        tile.kind = TerrainKind::Water;
         SDL_FRect bitmask = get_bitmask(tile);
         SDL_RenderTexture(renderer, grass, &bitmask, &tile.rect);
       }
     else
       {
-        tile.terrain->kind = TerrainKind::Solid;
+        tile.kind = TerrainKind::Crust;
       }
     
     if (SDL_PointInRectFloat(&point, &tile.rect))
@@ -565,7 +555,8 @@ class Game
         // stb_perlin_noise3_seed(fx * NOISE_SCALE, fy * NOISE_SCALE, 0.0f, 0, 0, 0, noise_seed);
         //  noise = (noise + 1.0f) * 0.5f;
 
-        tile.terrain = std::make_unique<Land>(Land::Type::Dirt);
+        tile.kind = TerrainKind::Crust;
+        //tile.terrain = std::make_unique<Land>(Land::Type::Dirt);
         // if (noise < 0.5f)
         //   {
         //     tile.terrain = std::make_unique<Water>(Water::Depth::Shallow);
@@ -582,7 +573,7 @@ class Game
     // Second pass: assign bitmask sprite now that all tiles have types
     for (auto &tile : tiles)
       {
-        if (tile.terrain->kind == TerrainKind::Liquid)
+        if (tile.kind == TerrainKind::Water)
           {
             tile.sprite = get_bitmask(tile);
             // SDL_Log("sprite: {%f, %f, %f, %f}", tile.sprite.x, tile.sprite.y, tile.sprite.w, tile.sprite.h);
@@ -593,5 +584,4 @@ class Game
           }
       }
   }
-
 };
