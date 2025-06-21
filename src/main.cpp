@@ -60,18 +60,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
 
   Game *game = new Game(window, renderer, font);
-  if (!game->load_assets())
-    {
-
-      SDL_Log("Couldn't load tileset_grass asset: %s\n", SDL_GetError());
-      return SDL_APP_FAILURE;
-    }
   
-  if (!game->create_world())
-    {
-      SDL_Log("Couldn't create game world: %s\n", SDL_GetError());
-      return SDL_APP_FAILURE;
-    }      
+  if (!game->create_world()) return SDL_APP_FAILURE;
 
   // initialize_terrain_mask();
   game->initialize_map();
@@ -107,8 +97,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
   double frame_time = (double)(SDL_GetPerformanceCounter() - game->curr_time) / game->frequency;
   // SDL_Log("frame took %fms", frame_time); 
-  if (frame_time < game->TARGET_FRAME_TIME) {
-    SDL_Delay((Uint32)((game->TARGET_FRAME_TIME - frame_time) * 1000.0));
+  if (frame_time < TARGET_FRAME_TIME) {
+    SDL_Delay((Uint32)((TARGET_FRAME_TIME - frame_time) * 1000.0));
   }
 
   return SDL_APP_CONTINUE;
